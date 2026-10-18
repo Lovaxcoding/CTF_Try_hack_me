@@ -145,7 +145,7 @@ HMAC-SHA256(
     message = session_id + "|" + step + "|" + token
 )
 
-La signature attendue est le digest hexadécimal en minuscules. La clé elle-même n'est pas la signature : c'était le problème dans ta requête précédente.
+La signature attendue est le digest hexadécimal en minuscules. La clé elle-même n'est pas la signature : c'était le problème dans ma requête précédente.
 
 curl -i -X POST http://gla2.thm/checkpoint \
   -H 'Content-Type: application/json' \
