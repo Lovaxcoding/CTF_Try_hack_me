@@ -1,0 +1,43 @@
+# Executables
+*.pck
+createdump
+*.x86_64
+*.exe
+*.dll
+*.so
+*.so.*
+*.dll.*
+*.dylib
+*.bin
+*.elf
+*.x86_64
+*.AppImage
+
+# Archives et fichiers compresses
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.bz2
+*.xz
+*.iso
+
+# Packages et installateurs
+*.deb
+*.rpm
+*.msi
+*.apk
+*.dmg
+
+# Images de machines virtuelles et disques
+*.qcow2
+*.vdi
+*.vmdk
+*.ova
+
+# Fichiers volumineux de compilation
+bin/
+obj/
+build/
+dist/

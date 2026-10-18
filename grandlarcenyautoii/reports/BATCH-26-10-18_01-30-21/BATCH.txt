@@ -1,0 +1,5 @@
+# Dirsearch started Sun Oct 18 01:33:15 2026 as: /usr/lib/python3/dist-packages/dirsearch/dirsearch.py -u http://gla2.thm/ -u directory-list-2.3-medium.txt
+
+200    11B   http://gla2.thm/health
+405     0B   http://gla2.thm/session
+405     0B   http://gla2.thm/session/

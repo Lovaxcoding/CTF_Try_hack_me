@@ -1,0 +1,97 @@
+# Nmap 7.94SVN scan initiated Sun Oct 18 00:33:52 2026 as: nmap -Pn -sSVC -oN scan/scan.txt 10.82.133.252
+Nmap scan report for 10.82.133.252
+Host is up (0.37s latency).
+Not shown: 998 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 9.6p1 Ubuntu 3ubuntu13.5 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   256 a2:67:af:1b:2b:f1:14:3b:92:bb:92:ab:29:f8:57:6f (ECDSA)
+|_  256 a1:67:f9:7d:c2:22:13:bd:e3:ca:89:20:ee:a1:26:37 (ED25519)
+80/tcp open  http    Kestrel
+|_http-title: Site doesn't have a title.
+|_http-server-header: Kestrel
+| fingerprint-strings: 
+|   FourOhFourRequest: 
+|     HTTP/1.1 404 Not Found
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:11 GMT
+|     Server: Kestrel
+|   GetRequest, HTTPOptions: 
+|     HTTP/1.1 404 Not Found
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:04 GMT
+|     Server: Kestrel
+|   Help: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:34 GMT
+|     Server: Kestrel
+|   Kerberos: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:37 GMT
+|     Server: Kestrel
+|   LDAPSearchReq, LPDString: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:43 GMT
+|     Server: Kestrel
+|   RTSPRequest: 
+|     HTTP/1.1 505 HTTP Version Not Supported
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:05 GMT
+|     Server: Kestrel
+|   SSLSessionReq, TerminalServerCookie: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:35 GMT
+|     Server: Kestrel
+|   TLSSessionReq: 
+|     HTTP/1.1 400 Bad Request
+|     Content-Length: 0
+|     Connection: close
+|     Date: Sat, 17 Oct 2026 21:34:36 GMT
+|_    Server: Kestrel
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port80-TCP:V=7.94SVN%I=7%D=10/18%Time=6AD3E9CE%P=x86_64-pc-linux-gnu%r(
+SF:GetRequest,76,"HTTP/1\.1\x20404\x20Not\x20Found\r\nContent-Length:\x200
+SF:\r\nConnection:\x20close\r\nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34
+SF::04\x20GMT\r\nServer:\x20Kestrel\r\n\r\n")%r(HTTPOptions,76,"HTTP/1\.1\
+SF:x20404\x20Not\x20Found\r\nContent-Length:\x200\r\nConnection:\x20close\
+SF:r\nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34:04\x20GMT\r\nServer:\x20
+SF:Kestrel\r\n\r\n")%r(RTSPRequest,87,"HTTP/1\.1\x20505\x20HTTP\x20Version
+SF:\x20Not\x20Supported\r\nContent-Length:\x200\r\nConnection:\x20close\r\
+SF:nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34:05\x20GMT\r\nServer:\x20Ke
+SF:strel\r\n\r\n")%r(FourOhFourRequest,76,"HTTP/1\.1\x20404\x20Not\x20Foun
+SF:d\r\nContent-Length:\x200\r\nConnection:\x20close\r\nDate:\x20Sat,\x201
+SF:7\x20Oct\x202026\x2021:34:11\x20GMT\r\nServer:\x20Kestrel\r\n\r\n")%r(H
+SF:elp,78,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Length:\x200\r\nC
+SF:onnection:\x20close\r\nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34:34\x
+SF:20GMT\r\nServer:\x20Kestrel\r\n\r\n")%r(SSLSessionReq,78,"HTTP/1\.1\x20
+SF:400\x20Bad\x20Request\r\nContent-Length:\x200\r\nConnection:\x20close\r
+SF:\nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34:35\x20GMT\r\nServer:\x20K
+SF:estrel\r\n\r\n")%r(TerminalServerCookie,78,"HTTP/1\.1\x20400\x20Bad\x20
+SF:Request\r\nContent-Length:\x200\r\nConnection:\x20close\r\nDate:\x20Sat
+SF:,\x2017\x20Oct\x202026\x2021:34:35\x20GMT\r\nServer:\x20Kestrel\r\n\r\n
+SF:")%r(TLSSessionReq,78,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Le
+SF:ngth:\x200\r\nConnection:\x20close\r\nDate:\x20Sat,\x2017\x20Oct\x20202
+SF:6\x2021:34:36\x20GMT\r\nServer:\x20Kestrel\r\n\r\n")%r(Kerberos,78,"HTT
+SF:P/1\.1\x20400\x20Bad\x20Request\r\nContent-Length:\x200\r\nConnection:\
+SF:x20close\r\nDate:\x20Sat,\x2017\x20Oct\x202026\x2021:34:37\x20GMT\r\nSe
+SF:rver:\x20Kestrel\r\n\r\n")%r(LPDString,78,"HTTP/1\.1\x20400\x20Bad\x20R
+SF:equest\r\nContent-Length:\x200\r\nConnection:\x20close\r\nDate:\x20Sat,
+SF:\x2017\x20Oct\x202026\x2021:34:43\x20GMT\r\nServer:\x20Kestrel\r\n\r\n"
+SF:)%r(LDAPSearchReq,78,"HTTP/1\.1\x20400\x20Bad\x20Request\r\nContent-Len
+SF:gth:\x200\r\nConnection:\x20close\r\nDate:\x20Sat,\x2017\x20Oct\x202026
+SF:\x2021:34:43\x20GMT\r\nServer:\x20Kestrel\r\n\r\n");
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Sun Oct 18 00:35:54 2026 -- 1 IP address (1 host up) scanned in 121.82 seconds
