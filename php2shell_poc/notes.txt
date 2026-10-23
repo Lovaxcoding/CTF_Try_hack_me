@@ -1,0 +1,115 @@
+======================== PHP2SHELL PROOF OF CONCEPT =================
+
+Objectifs d'apprentissage
+    - Expliquer le rôle de `session.upload_progress` et pourquoi ce mécanisme s'exécute avant tout code applicatif.
+    - Comprendre comment une interruption de l'exécution PHP due à une saturation mémoire (« memory bailout ») peut laisser subsister un pointeur « orphelin » qui persiste lors de la requête suivante.
+    - Distinguer les deux CVE en question : l'une permettant la divulgation d'informations en mémoire, l'autre permettant l'exécution de code à distance.
+    - Mettre en œuvre la chaîne d'exploitation (« exploit chain ») publique pour extraire des données de la mémoire, contourner l'ASLR et exécuter une commande.
+    - Détecter l'attaque et appliquer les mesures d'atténuation réellement efficaces.
+
+1 - CONNAISSANCE 
+
+Toute vulnérabilité exploite un élément conçu pour être utile, et celle-ci ne fait pas exception. Avant d'examiner le bug, il convient de comprendre la fonctionnalité sur laquelle il repose, car c'est précisément cette fonctionnalité qui confère à l'attaquant ses possibilités d'action.
+
+Lorsqu'un navigateur téléverse un fichier volumineux, le serveur ne dispose d'aucun moyen simple d'informer la page de l'état d'avancement de l'opération. PHP résout ce problème grâce à une fonctionnalité appelée `session.upload_progress`. Pendant que PHP lit le corps d'une requête de type `multipart/form-data` en provenance du réseau, il inscrit des informations sur le téléversement en cours — notamment son nom, sa taille totale et le nombre d'octets déjà reçus — dans la variable `$_SESSION` de l'utilisateur. Une seconde requête peut alors lire ces données de session et communiquer la progression au navigateur. Cette fonctionnalité est activée par défaut ; pour un téléversement donné, elle est déclenchée par l'inclusion d'un champ de formulaire dont le nom correspond au paramètre `session.upload_progress.name` (qui, par défaut, est défini sur `PHP_SESSION_UPLOAD_PROGRESS`).
+
+Le détail qui a son importance, c’est le moment où cela se produit. L’analyse du corps de la requête (« request body ») est l’une des premières opérations effectuées par PHP, bien avant l’initialisation de l’environnement de requête et bien avant la compilation et l’exécution du script ciblé par l’URL. Les mises à jour de progression sont générées depuis les fonctions de rappel (« callbacks ») chargées de l’analyse du corps de la requête ; elles surviennent donc avant même l’exécution du moindre code applicatif. Cela entraîne une conséquence que les concepteurs de cette fonctionnalité n’avaient jamais envisagé de rendre accessible : l’exécution de ce code ne nécessite ni appel à `session_start()` dans la page cible, ni authentification valide, ni, en réalité, la moindre logique applicative. N’importe quelle URL sur le serveur acceptant une requête POST suffit, même si le script associé se contente d’afficher une simple ligne de texte.
+
+Cette phase, qui précède l’exécution du code applicatif, constitue le point d’ancrage. C’est au sein de cet intervalle que se déploie l’intégralité de « PHP2Shell », entièrement pilotée par les données qu’un attaquant insère dans un envoi de fichiers de type « multipart » — tout cela alors que l’application hébergée sur le serveur est encore totalement inactive.
+
+2 - CONCEPT DU VULNÉRABILITÉ 
+
+La fonctionnalité de suivi de la progression des téléversements (« upload-progress ») n'est pas, en soi, la vulnérabilité. Celle-ci réside dans ce qui se produit lorsque la mémoire vient à manquer alors que cette fonctionnalité est en cours d'exécution ; pour le comprendre, il faut savoir comment PHP gère une erreur fatale.
+
+PHP limite la quantité de mémoire qu'une requête unique peut utiliser via le paramètre `memory_limit`. Lorsqu'une requête tente de dépasser cette limite, PHP ne peut pas poursuivre son exécution ; il déclenche alors ce que le moteur appelle un « bailout » (abandon d'urgence) : il utilise `longjmp()` pour revenir immédiatement à un point de récupération sûr, interrompant ainsi toute opération en cours. C'est ce mécanisme qui est à l'origine de l'erreur fatale bien connue : « Allowed memory size exhausted ». En temps normal, une requête effectue un nettoyage — elle libère la mémoire et supprime les pointeurs qui y faisaient référence — mais le « bailout » ignore cette étape. Il s'agit d'une sortie d'urgence, et non d'une procédure d'arrêt ordonnée.
+
+La faille est une question de synchronisation. Si une pénurie de mémoire survient après que le moteur a libéré un bloc de mémoire, mais avant qu'il n'ait supprimé le pointeur qui y faisait référence, le « bailout » laisse derrière lui un pointeur « pendant » (dangling pointer) qui cible une zone mémoire désormais invalide. Il s'agit d'un cas classique de pointeur non valide, répertorié sous la référence CWE-824 : « Accès à un pointeur non initialisé » (Access of Uninitialised Pointer).
+
+En soi, un pointeur « pendant » (dangling pointer) au sein d'une requête qui vient de s'achever serait inoffensif, puisque la requête est terminée. Ce qui rend la situation dangereuse, c'est le modèle de fonctionnement du serveur. Dans la configuration « prefork » d'Apache avec mod_php, un processus de traitement (worker) unique prend en charge les requêtes les unes après les autres, sans redémarrer entre chacune d'elles. Le pointeur obsolète ne disparaît donc pas avec la requête ayant échoué ; il demeure dans la mémoire du processus. Ainsi, lorsque la requête suivante est traitée par ce même processus, le moteur tente d'accéder à une adresse mémoire via un pointeur qui n'a jamais été réinitialisé. Un attaquant capable de contrôler le contenu alloué dans cet espace libéré — lors de la seconde requête — peut alors déterminer vers quoi pointe ce pointeur.
+
+À partir de cette unique faille, les chercheurs ont élaboré deux attaques distinctes, ce qui explique pourquoi « PHP2Shell » est associé à deux identifiants. La vulnérabilité CVE-2026-109618 concerne la divulgation d'informations en mémoire : le pointeur obsolète est interprété comme une chaîne de caractères dont la longueur, influençable par l'attaquant, est surdimensionnée. PHP renvoie alors le résultat dans un en-tête de réponse, offrant à l'attaquant une fenêtre sur la mémoire du processus. La vulnérabilité CVE-2026-109619 permet, quant à elle, l'exécution de code à distance (RCE) : l'état corrompu est exploité pour prendre le contrôle du flux d'exécution du programme. Le journal des modifications (changelog) de PHP traite ces deux problèmes sous une description unique — « Éviter la corruption d'état via un mécanisme d'interruption (bailout) » — qui identifie précisément la cause profonde. Les trois étapes suivantes suivent cette logique : identifier la cible, exploiter la divulgation d'informations pour contourner l'ASLR, puis transformer cette corruption en un accès de type « shell ».
+
+3 - TEST EN TEMPS RÉEL : RECONNAISSANCE 
+
+Adresse IP : 10.82.176.22
+Serveur vulnérable : sur le port 8088
+
+ubuntu@tryhackme-2404:~$ docker ps --format '{{.Names}}  {{.Image}}  {{.Status}}'
+php2shell-target  php:8.4.26-apache  Up 15 minutes
+ubuntu@tryhackme-2404:~$ 
+
+docker exec php2shell-target php -v
+PHP 8.4.26 (cli) (built: Oct 21 2026 00:31:19) (NTS)
+Copyright (c) The PHP Group
+Built by https://github.com/docker-library/php
+Zend Engine v4.4.26, Copyright (c) Zend Technologies
+    with Zend OPcache v8.4.26, Copyright (c), by Zend Technologies
+
+Le serveur est en version 8.4.26 ; il lui manque la mise à jour corrective 8.4.27, il est donc vulnérable. Examinons maintenant la page que nous allons cibler
+
+ubuntu@tryhackme-2404:~$ curl -s http://127.0.0.1:8088/index.php
+OK
+ubuntu@tryhackme-2404:~$ docker exec php2shell-target cat /var/www/html/index.php
+<?php echo "OK\n"; ?>
+ubuntu@tryhackme-2404:~$
+
+L'application se résume à une unique ligne qui affiche « OK ». Il n'y a ni formulaire de connexion, ni fonction de téléversement de fichiers, ni base de données ; le code ne contient, par conséquent, aucune faille exploitable. C'est un point sur lequel il convient de s'attarder : si une attaque réussit contre cette page, elle vise l'environnement d'exécution (runtime) et non l'application elle-même. Ainsi, une cible réelle — comme un site WordPress ou Laravel — ne bénéficie pas d'une meilleure protection simplement parce que son propre code est exempt de vulnérabilités.
+
+Le serveur utilise une configuration classique de type « prefork » avec `mod_php`, où l'option `session.upload_progress` est activée (comme c'est le cas par défaut). Pour les besoins de ce laboratoire, la configuration a été restreinte à un seul processus (« worker ») et la limite de mémoire (`memory_limit`) a été fixée à une valeur basse ; cela permet de garantir la réutilisation du pointeur « pendant » (dangling pointer) et de provoquer aisément une situation de dépassement de mémoire (« out-of-memory »). Dans un environnement de production, le serveur gérerait davantage de processus avec une limite de mémoire plus élevée, ce qui rendrait la synchronisation temporelle plus complexe à maîtriser, sans pour autant la rendre impossible.
+
+
+4 - EXPLOITATION 
+Les systèmes modernes chargent le code et les données à des adresses aléatoires ; il s'agit d'une mesure de défense appelée « randomisation de l'espace d'adressage » (ASLR, pour *Address Space Layout Randomisation*). Un attaquant souhaitant détourner l'exécution doit connaître l'emplacement réel des éléments en mémoire ; l'ASLR a précisément pour but d'empêcher l'accès à cette information. La vulnérabilité -2026-109618 contourne cette protection en transformant un pointeur « orphelin » (*dangling pointer*) en une fuite de la mémoire propre au processus de traitement (*worker*).
+
+Le mécanisme exploite le processus d'interruption (*bailout*) déclenché lors de la tâche précédente. Une situation de saturation mémoire (*out-of-memory*) est provoquée au moment du traitement d'un identifiant de session, ce qui laisse subsister un pointeur obsolète vers cet identifiant. Une requête ultérieure réutilise l'espace mémoire ainsi libéré ; le pointeur obsolète désigne alors une chaîne de caractères dont l'attaquant a artificiellement augmenté la longueur, bien au-delà de la taille des données réelles. Lors de l'envoi de la réponse, le système lit cette chaîne (l'identifiant de session) surdimensionnée et la renvoie au client via l'en-tête HTTP `Set-Cookie: PHPSESSID`. Cet en-tête contient alors tout ce qui se trouvait en mémoire, juste après la chaîne en question — une quantité estimée, selon les recherches, à environ 67 Ko de la mémoire du processus par requête. Dans un environnement réel, cette mémoire peut contenir des mots de passe d'autres utilisateurs, des cookies de session, des clés, voire des clés privées ; dans le cadre de cette exploitation, elle fournit les adresses nécessaires à l'attaquant.
+
+L'exploit procède à deux fuites d'informations successives. La première révèle l'adresse de base du tas (heap) mémoire de PHP, tandis que la seconde révèle l'adresse de base de la bibliothèque PHP (libphp) en lisant un pointeur dont le décalage (offset) au sein de la bibliothèque est connu. Combinées, ces deux fuites permettent à l'attaquant de localiser précisément le tas ainsi que le code du moteur lui-même dans ce processus de travail (worker) spécifique ; il s'agissait là du dernier élément nécessaire pour contourner l'ASLR. Vous pouvez observer ces deux fuites en exécutant l'exploit : elles constituent sa toute première opération, après quoi il enchaîne sur l'étape d'exécution de code que nous avons à réaliser dans la tâche suivante.
+
+ubuntu@tryhackme-2404:~/php2shell-bypass-aslr-exp$ python3 exploit.py -u http://127.0.0.1:8088/index.php
+[*] target http://127.0.0.1:8088/index.php (cmd='id>/out/p1')
+[*] offsets loaded from /home/ubuntu/php2shell-bypass-aslr-exp/out/offsets.env
+[*] offsets: zif=0x465370 dtor=0x65eb60 htdata=0x690d8
+[*] rotating worker over HTTP
+[*] stage 1: heap leak (attempt 1/3)
+[+] chunk base = 0x73794ec00000
+[*] rotating worker over HTTP
+[*] stage 2: libphp leak (attempt 1/3)
+[+] libphp base = 0x73795085e000
+[*] rotating worker over HTTP
+[*] stage 3: HTDATA=0x73794ec690d8 ZIF=0x737950cc3370
+[+] W3 attempt 1
+PROOF: uid=33(www-data) gid=33(www-data) groups=33(www-data)
+ubuntu@tryhackme-2404:~/php2shell-bypass-aslr-exp$ 
+
+Les deux lignes marquées d’un [+] correspondent à la divulgation d’informations : l’adresse de base d’un bloc du tas (*heap chunk*) et celle de la bibliothèque `libphp`, toutes deux extraites directement d’un en-tête `Set-Cookie`. Ces adresses changent à chaque exécution, ce qui témoigne du bon fonctionnement de l’ASLR ; plutôt que de tenter de les deviner, l’attaque se contente de les lire à chaque fois. Une fois le tas et la bibliothèque localisés, la seconde vulnérabilité (CVE) peut prendre le relais et transformer cette corruption en exécution de code.
+
+5 - PROOF OF CONCEPT
+
+La fuite d'informations a révélé à l'attaquant l'emplacement de tous les éléments. L'identifiant CVE-2026-109619 permet de transformer cette connaissance en une commande exécutée sur le serveur. Le mécanisme consiste à réoccuper la mémoire libérée, non pas avec des données destinées à être lues, mais avec un objet soigneusement forgé qui détourne les processus de nettoyage internes du moteur.
+
+Lorsqu'une valeur est détruite, le moteur peut appeler un pointeur de fonction associé — un destructeur — afin de libérer les ressources allouées à cette valeur. L'exploitation remplace la référence devenue obsolète par une structure interne factice (une `HashTable`), dont le pointeur de destructeur (`pDestructor`) est configuré pour pointer vers l'adresse de la fonction `system()` au sein de la bibliothèque PHP — une adresse rendue accessible grâce à la fuite d'informations mentionnée précédemment. Lorsque le moteur procède au nettoyage de cette valeur à l'issue du traitement de la requête, il « croit » appeler un destructeur inoffensif ; en réalité, il exécute `system()` en utilisant, comme argument, des octets contrôlés par l'attaquant. La commande est alors exécutée avec les privilèges de l'utilisateur du serveur web. Cette attaque ne nécessite ni la bibliothèque C standard, ni aucun « gadget » externe à PHP ; l'intégralité du mécanisme repose exclusivement sur le code propre au moteur.
+
+ubuntu@tryhackme-2404:~/php2shell-bypass-aslr-exp$ python3 exploit.py -u http://127.0.0.1:8088/index.php -c 'cat /f>/out/p1' --proof-file out/p1
+[*] target http://127.0.0.1:8088/index.php (cmd='cat /f>/out/p1')
+[*] offsets loaded from /home/ubuntu/php2shell-bypass-aslr-exp/out/offsets.env
+[*] offsets: zif=0x465370 dtor=0x65eb60 htdata=0x690d8
+[*] rotating worker over HTTP
+[*] stage 1: heap leak (attempt 1/3)
+[+] chunk base = 0x73794ec00000
+[*] rotating worker over HTTP
+[*] stage 2: libphp leak (attempt 1/3)
+[+] libphp base = 0x73795085e000
+[*] rotating worker over HTTP
+[*] stage 3: HTDATA=0x73794ec690d8 ZIF=0x737950cc3370
+[+] W3 attempt 1
+PROOF: [REDACTED]
+ubuntu@tryhackme-2404:~/php2shell-bypass-aslr-exp$
+
+6 - DETECTION ET REPARATION 
+Comme PHP2Shell réside au sein de l'environnement d'exécution (runtime), la stratégie consistant à « mettre à jour le site web » est totalement inefficace. La mise à jour de WordPress, Drupal, Joomla ou Laravel modifie l'application, mais le code vulnérable se situe en dessous, au niveau de l'environnement PHP lui-même. La seule solution complète consiste à corriger l'environnement d'exécution PHP — en mettant à jour le paquet PHP fourni par votre distribution ou l'image de base sur laquelle votre système est construit — vers les versions 8.5.12, 8.4.27, 8.3.36 ou 8.2.35, puis à redémarrer tous les processus de traitement (workers) afin qu'aucun ancien code ne reste en exécution.
+
+En attendant l'application de ce correctif, plusieurs mesures provisoires permettent de réduire l'exposition, bien que l'équipe PHP souligne qu'aucune ne remplace une mise à jour corrective. Désactiver la fonctionnalité exploitée par l'attaque — en définissant `session.upload_progress.enabled = 0` et en redémarrant tous les processus — permet d'éliminer le déclencheur de la plupart des techniques identifiées. La désactivation du cache d'opcodes (`opcache.enable = 0`) entrave le mécanisme d'exécution du code. Sur PHP 8.5, le paramètre `fatal_error_backtraces = 0` permet de contrer spécifiquement la vulnérabilité CVE-2026-109619. Au niveau du périmètre réseau, le rejet des requêtes de type `multipart/form-data` bloque le vecteur d'attaque, au prix toutefois de l'impossibilité d'effectuer des téléversements de fichiers légitimes. Enfin, exécuter le processus PHP avec des privilèges restreints limite les conséquences en cas de réussite de l'attaque.
+
+Il convient de noter qu'une mesure de défense particulière s'avère inefficace : un pare-feu applicatif web (WAF) fonctionnant comme un module PHP n'inspecte le trafic qu'une fois que PHP a transmis la main à l'application ; or, cette attaque produit ses effets avant même que l'application ne soit exécutée. L'action malveillante est achevée pendant la phase d'analyse (parsing) de la requête, empêchant ainsi tout filtre interne au processus de la détecter. La protection doit donc être intégrée soit au niveau de l'environnement d'exécution corrigé, soit au sein d'une couche située en amont de PHP.
+
+En matière de détection, cette attaque laisse des traces caractéristiques. Le mécanisme d'exfiltration génère des valeurs `PHPSESSID` anormalement longues dans les en-têtes de réponse `Set-Cookie`, ce qui les distingue nettement des identifiants de longueur fixe habituellement émis par PHP. Les requêtes de livraison sont des requêtes POST multipart volumineuses avec un très grand nombre de champs, incluant le champ PHP_SESSION_UPLOAD_PROGRESS. La saturation de mémoire à l'origine du bogue se manifeste par des plantages des processus PHP et des erreurs de mémoire insuffisante dans les journaux. Chacun de ces événements, et surtout leur combinaison, mérite une alerte pendant la mise en œuvre du correctif.
