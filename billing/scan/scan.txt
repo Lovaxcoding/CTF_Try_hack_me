@@ -1,0 +1,21 @@
+# Nmap 7.94SVN scan initiated Thu Oct 29 02:48:06 2026 as: nmap -Pn -sSVC -p22,80,3306,5038 -oN scan/scan.txt 10.82.148.53
+Nmap scan report for 10.82.148.53
+Host is up (0.28s latency).
+
+PORT     STATE SERVICE  VERSION
+22/tcp   open  ssh      OpenSSH 9.2p1 Debian 2+deb12u6 (protocol 2.0)
+| ssh-hostkey: 
+|   256 6e:73:9f:f2:01:64:50:11:fe:f3:87:5c:1a:61:d8:9a (ECDSA)
+|_  256 f5:60:57:4a:02:15:a2:4d:7a:56:fb:c0:7f:b8:72:63 (ED25519)
+80/tcp   open  http     Apache httpd 2.4.62 ((Debian))
+| http-robots.txt: 1 disallowed entry 
+|_/mbilling/
+| http-title:             MagnusBilling        
+|_Requested resource was http://10.82.148.53/mbilling/
+|_http-server-header: Apache/2.4.62 (Debian)
+3306/tcp open  mysql    MariaDB (unauthorized)
+5038/tcp open  asterisk Asterisk Call Manager 2.10.6
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Thu Oct 29 02:48:23 2026 -- 1 IP address (1 host up) scanned in 17.71 seconds
