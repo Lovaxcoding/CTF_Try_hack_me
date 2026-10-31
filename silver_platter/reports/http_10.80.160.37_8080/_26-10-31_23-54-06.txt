@@ -1,0 +1,9 @@
+# Dirsearch started Sat Oct 31 23:57:41 2026 as: /usr/lib/python3/dist-packages/dirsearch/dirsearch.py -u http://10.80.160.37:8080
+
+302     0B   http://10.80.160.37:8080/console/    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/console/j_security_check    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/console    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/console/payments/config.json    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/console/login/LoginForm.jsp    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/console/base/config.json    -> REDIRECTS TO: /noredirect.html
+302     0B   http://10.80.160.37:8080/website    -> REDIRECTS TO: http://10.80.160.37:8080/website/

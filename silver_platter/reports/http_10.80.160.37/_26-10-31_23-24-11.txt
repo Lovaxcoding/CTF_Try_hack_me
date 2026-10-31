@@ -1,0 +1,8 @@
+# Dirsearch started Sat Oct 31 23:27:00 2026 as: /usr/lib/python3/dist-packages/dirsearch/dirsearch.py -u http://10.80.160.37
+
+301   178B   http://10.80.160.37/assets    -> REDIRECTS TO: http://10.80.160.37/assets/
+403   564B   http://10.80.160.37/assets/
+301   178B   http://10.80.160.37/images    -> REDIRECTS TO: http://10.80.160.37/images/
+403   564B   http://10.80.160.37/images/
+200    17KB  http://10.80.160.37/LICENSE.txt
+200   771B   http://10.80.160.37/README.txt
