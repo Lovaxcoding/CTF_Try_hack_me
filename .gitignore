@@ -43,3 +43,4 @@ build/
 dist/
 soupedecode1/rockyou.txt
 config/*.ovpn
+wordlists/
