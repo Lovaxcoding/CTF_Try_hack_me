@@ -44,3 +44,5 @@ dist/
 soupedecode1/rockyou.txt
 config/*.ovpn
 wordlists/
+lookup/id_rsa
+lookup/password.txt
