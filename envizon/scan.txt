@@ -1,0 +1,93 @@
+# Nmap 7.94SVN scan initiated Fri Nov 13 00:09:37 2026 as: nmap -Pn -sSVC -oN scan.txt -p22,3000 10.80.186.209
+Nmap scan report for 10.80.186.209
+Host is up (0.26s latency).
+
+PORT     STATE SERVICE  VERSION
+22/tcp   open  ssh      OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   2048 cb:98:15:ed:13:41:b4:d5:53:72:53:54:c7:56:e6:6a (RSA)
+|   256 c8:f2:71:60:0d:aa:f9:a0:d1:01:e5:61:30:97:ba:f7 (ECDSA)
+|_  256 11:23:45:6f:40:7a:9c:e4:d4:f1:05:ac:45:d5:ff:1a (ED25519)
+3000/tcp open  ssl/ppp?
+| ssl-cert: Subject: commonName=None/organizationName=evait/stateOrProvinceName=None/countryName=DE
+| Not valid before: 2020-09-30T22:19:49
+|_Not valid after:  2021-09-30T22:19:49
+| fingerprint-strings: 
+|   DNSVersionBindReqTCP, GenericLines, RPCCheck, RTSPRequest: 
+|     HTTP/1.1 400 Bad Request
+|   GetRequest: 
+|     HTTP/1.0 301 Moved Permanently
+|     Location: https://localhost/scans
+|     Content-Type: text/html
+|     Cache-Control: no-cache
+|     X-Request-Id: 0bbf20da-1e23-45a3-b489-7667b74e51da
+|     X-Runtime: 0.002414
+|     Strict-Transport-Security: max-age=31536000; includeSubDomains
+|     Content-Length: 89
+|     <html><body>You are being <a href="https://localhost/scans">redirected</a>.</body></html>
+|   HTTPOptions: 
+|     HTTP/1.0 404 Not Found
+|     Content-Type: text/html; charset=UTF-8
+|     X-Request-Id: 68673ffc-61c0-4c99-ada6-d8263ac36b1c
+|     X-Runtime: 0.001509
+|     Strict-Transport-Security: max-age=31536000; includeSubDomains
+|     Content-Length: 1722
+|     <!DOCTYPE html>
+|     <html>
+|     <head>
+|     <title>The page you were looking for doesn't exist (404)</title>
+|     <meta name="viewport" content="width=device-width,initial-scale=1">
+|     <style>
+|     .rails-default-error-page {
+|     background-color: #EFEFEF;
+|     color: #2E2F30;
+|     text-align: center;
+|     font-family: arial, sans-serif;
+|     margin: 0;
+|     .rails-default-error-page div.dialog {
+|     width: 95%;
+|     max-width: 33em;
+|     margin: 4em auto 0;
+|     .rails-default-error-page div.dialog > div {
+|     border: 1px solid #CCC;
+|     border-right-color: #999;
+|     border-left-color: #999;
+|     border-bottom-color: #BBB;
+|     border-top: #B00100 solid 4px;
+|_    border-top-left-radius: 9p
+|_ssl-date: TLS randomness does not represent time
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port3000-TCP:V=7.94SVN%T=SSL%I=7%D=11/13%Time=6AF62B5A%P=x86_64-pc-linu
+SF:x-gnu%r(GenericLines,1C,"HTTP/1\.1\x20400\x20Bad\x20Request\r\n\r\n")%r
+SF:(GetRequest,16D,"HTTP/1\.0\x20301\x20Moved\x20Permanently\r\nLocation:\
+SF:x20https://localhost/scans\r\nContent-Type:\x20text/html\r\nCache-Contr
+SF:ol:\x20no-cache\r\nX-Request-Id:\x200bbf20da-1e23-45a3-b489-7667b74e51d
+SF:a\r\nX-Runtime:\x200\.002414\r\nStrict-Transport-Security:\x20max-age=3
+SF:1536000;\x20includeSubDomains\r\nContent-Length:\x2089\r\n\r\n<html><bo
+SF:dy>You\x20are\x20being\x20<a\x20href=\"https://localhost/scans\">redire
+SF:cted</a>\.</body></html>")%r(HTTPOptions,79B,"HTTP/1\.0\x20404\x20Not\x
+SF:20Found\r\nContent-Type:\x20text/html;\x20charset=UTF-8\r\nX-Request-Id
+SF::\x2068673ffc-61c0-4c99-ada6-d8263ac36b1c\r\nX-Runtime:\x200\.001509\r\
+SF:nStrict-Transport-Security:\x20max-age=31536000;\x20includeSubDomains\r
+SF:\nContent-Length:\x201722\r\n\r\n<!DOCTYPE\x20html>\n<html>\n<head>\n\x
+SF:20\x20<title>The\x20page\x20you\x20were\x20looking\x20for\x20doesn't\x2
+SF:0exist\x20\(404\)</title>\n\x20\x20<meta\x20name=\"viewport\"\x20conten
+SF:t=\"width=device-width,initial-scale=1\">\n\x20\x20<style>\n\x20\x20\.r
+SF:ails-default-error-page\x20{\n\x20\x20\x20\x20background-color:\x20#EFE
+SF:FEF;\n\x20\x20\x20\x20color:\x20#2E2F30;\n\x20\x20\x20\x20text-align:\x
+SF:20center;\n\x20\x20\x20\x20font-family:\x20arial,\x20sans-serif;\n\x20\
+SF:x20\x20\x20margin:\x200;\n\x20\x20}\n\n\x20\x20\.rails-default-error-pa
+SF:ge\x20div\.dialog\x20{\n\x20\x20\x20\x20width:\x2095%;\n\x20\x20\x20\x2
+SF:0max-width:\x2033em;\n\x20\x20\x20\x20margin:\x204em\x20auto\x200;\n\x2
+SF:0\x20}\n\n\x20\x20\.rails-default-error-page\x20div\.dialog\x20>\x20div
+SF:\x20{\n\x20\x20\x20\x20border:\x201px\x20solid\x20#CCC;\n\x20\x20\x20\x
+SF:20border-right-color:\x20#999;\n\x20\x20\x20\x20border-left-color:\x20#
+SF:999;\n\x20\x20\x20\x20border-bottom-color:\x20#BBB;\n\x20\x20\x20\x20bo
+SF:rder-top:\x20#B00100\x20solid\x204px;\n\x20\x20\x20\x20border-top-left-
+SF:radius:\x209p")%r(RTSPRequest,1C,"HTTP/1\.1\x20400\x20Bad\x20Request\r\
+SF:n\r\n")%r(RPCCheck,1C,"HTTP/1\.1\x20400\x20Bad\x20Request\r\n\r\n")%r(D
+SF:NSVersionBindReqTCP,1C,"HTTP/1\.1\x20400\x20Bad\x20Request\r\n\r\n");
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Nov 13 00:12:00 2026 -- 1 IP address (1 host up) scanned in 142.93 seconds
